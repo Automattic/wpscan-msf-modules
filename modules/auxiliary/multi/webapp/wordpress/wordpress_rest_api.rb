@@ -3,14 +3,14 @@
 # Usage:
 #
 #   msf6 > use auxiliary/multi/webapp/wordpress/wordpress_rest_api
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set USERNAME admin
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set PASSWORD password
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set REST_URI /wp-json/myapi/v1/my_endpoint
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set BODY json-payload (or file:mypayload.json)
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set RHOST example.com
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set SSL true
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > set RPORT 443
-#   msf6 auxiliary(multi/webapp/wordpress/wordpress_rest_api) > run
+#   msf6 > set USERNAME admin
+#   msf6 > set PASSWORD password
+#   msf6 > set REST_ROUTE /myapi/v1/my_endpoint
+#   msf6 > set BODY json-payload (or file:mypayload.json)
+#   msf6 > set RHOST example.com
+#   msf6 > set SSL true
+#   msf6 > set RPORT 443
+#   msf6 > run
 #
 # If USERNAME/PASSWORD is set, the module will automatically try to fetch a REST nonce
 # using the `rest-nonce` ajax action, and use this in the actual REST request.
@@ -29,7 +29,10 @@ class MetasploitModule < Msf::Auxiliary
         {
           'Name' => 'WP Generic call REST API',
           'Description' => %q{
-            Calls a rest api endpoint in WordPress with a json payload.
+            Calls a rest api endpoint in WordPress with an optional json payload.
+
+            The REST_ROUTE is the REST API endpoint to invoke, without the `/wp-json/` or
+            `?rest_route=` previxes.
 
             If USERNAME/PASSWORD is set, the module will automatically try to fetch a REST nonce
             using the `rest-nonce` ajax action, and use this in the actual REST request.
@@ -53,7 +56,7 @@ class MetasploitModule < Msf::Auxiliary
     register_options( [
       OptString.new( 'USERNAME', 'The admin user we\'ll be exploiting.' ),
       OptString.new( 'PASSWORD', 'Password for the admin user.' ),
-      OptString.new( 'REST_URI', 'The path to the REST API endpoint to call', required: true ),
+      OptString.new( 'REST_ROUTE', 'The REST API endpoint to call', required: true ),
       OptString.new( 'BODY',     'The payload body in json format, load from file with "file:..."' ),
     ])
   end
@@ -76,8 +79,11 @@ class MetasploitModule < Msf::Auxiliary
     datastore['PASSWORD']
   end
 
-  def uri_path
-    normalize_uri(datastore['REST_URI'])
+  def rest_uri
+    normalize_uri(
+      target_uri.path,
+      "index.php?rest_route=#{Rex::Text.uri_encode(datastore['REST_ROUTE'])}"
+    )
   end
 
   def body
@@ -126,7 +132,7 @@ class MetasploitModule < Msf::Auxiliary
     headers['X-WP-Nonce'] = @rest_nonce if @rest_nonce
 
     res = send_request_raw({
-      'uri' => uri_path,
+      'uri' => rest_uri,
       'method' => body.empty? ? 'GET' : 'POST',
       'headers' => headers,
       'cookie' => @cookies,
